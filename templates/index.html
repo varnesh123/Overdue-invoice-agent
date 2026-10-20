@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Overdue Invoice Follow-up Agent + Mock Zoho Sandbox</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-6 font-sans">
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Header & Summary Bar -->
+    <div class="flex flex-wrap justify-between items-center bg-slate-900 p-5 rounded-xl border border-slate-800">
+      <div>
+        <span class="text-xs font-semibold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2.5 py-1 rounded">Official Demo Target: Zoho Invoice Sandbox</span>
+        <h1 class="text-2xl font-bold mt-2">Overdue Invoice Follow-up Agent</h1>
+        <p class="text-slate-400 text-sm">Command: <code class="text-emerald-400">"Chase my overdue invoices"</code> — Polls portal, escalates tone, enforces human approval & verifies delivery.</p>
+      </div>
+      <div class="flex items-center gap-4 mt-4 sm:mt-0">
+        <div class="bg-slate-800 px-4 py-2.5 rounded-lg border border-slate-700 text-right">
+          <div class="text-xs text-slate-400">Still-Unpaid Total</div>
+          <div id="unpaidTotal" class="text-xl font-bold text-rose-400">₹0.00</div>
+        </div>
+        <button onclick="resetDemo()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg text-sm border border-slate-700">Reset Sandbox</button>
+      </div>
+    </div>
+
+    <!-- Step 1: Agent Controls -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-4">
+        <h2 class="font-semibold text-lg text-indigo-300">1. Trigger Agent & Controls</h2>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Approved Base Reminder Tone</label>
+          <select id="baseTone" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+            <option value="Polite">Polite & Collaborative</option>
+            <option value="Professional">Direct & Professional</option>
+          </select>
+        </div>
+        <button onclick="planReminders()" class="w-full bg-indigo-600 hover:bg-indigo-500 font-semibold py-2.5 rounded-lg text-sm transition">
+          ▶ Run Agent: "Chase My Overdue Invoices"
+        </button>
+        <hr class="border-slate-800">
+        <button onclick="runOfficialTests()" class="w-full bg-emerald-600 hover:bg-emerald-500 font-semibold py-2.5 rounded-lg text-sm transition">
+          ⚡ Run Official Test Cases (TC1 – TC4)
+        </button>
+      </div>
+
+      <!-- Mock Zoho Invoice Portal View -->
+      <div class="lg:col-span-2 bg-slate-900 p-5 rounded-xl border border-slate-800">
+        <div class="flex justify-between items-center mb-3">
+          <h2 class="font-semibold text-lg text-amber-300">3. Mock Zoho Invoice Sandbox (Live State & Promised Dates)</h2>
+          <span class="text-xs text-slate-400">Endpoint: <code>/api/portal/invoices</code></span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-800 text-slate-300 uppercase">
+              <tr>
+                <th class="p-2.5">Invoice ID</th>
+                <th class="p-2.5">Client</th>
+                <th class="p-2.5">Amount</th>
+                <th class="p-2.5">Overdue</th>
+                <th class="p-2.5">Portal State</th>
+                <th class="p-2.5">Logged Client Reply / Promise</th>
+                <th class="p-2.5">Sent Count</th>
+              </tr>
+            </thead>
+            <tbody id="portalTable" class="divide-y divide-slate-800"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2, 4, 5, 6: Decision Queue, Human Approval Gate & Verification Log -->
+    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800">
+      <h2 class="font-semibold text-lg text-sky-300 mb-3">2, 4 & 5. Agent Decision Log, Human-in-the-Loop Approval & Verification</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-800 text-slate-300 uppercase">
+            <tr>
+              <th class="p-2.5">Invoice & Source</th>
+              <th class="p-2.5">Evidence & Rule Decision</th>
+              <th class="p-2.5">Escalated Tone & Draft Preview</th>
+              <th class="p-2.5">Human Approval Gate</th>
+              <th class="p-2.5">Action & Verification State</th>
+            </tr>
+          </thead>
+          <tbody id="agentLogsTable" class="divide-y divide-slate-800"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Step 7: Official Test Case Runner Matrix (TC1 - TC4) -->
+    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800">
+      <h2 class="font-semibold text-lg text-emerald-300 mb-3">7. Official Test Cases Evidence Matrix (TC1 – TC4)</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-800 text-slate-300 uppercase">
+            <tr>
+              <th class="p-2.5">TC ID</th>
+              <th class="p-2.5">Scenario</th>
+              <th class="p-2.5">Specified Input</th>
+              <th class="p-2.5">Expected Result</th>
+              <th class="p-2.5">Actual Result</th>
+              <th class="p-2.5">Traceable Evidence</th>
+            </tr>
+          </thead>
+          <tbody id="testMatrixTable" class="divide-y divide-slate-800"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    async function loadState() {
+      const res = await fetch('/api/state');
+      const data = await res.json();
+      
+      document.getElementById('unpaidTotal').innerText = '₹' + data.still_unpaid_total.toLocaleString('en-IN');
+
+      // Render Portal Table
+      const pBody = document.getElementById('portalTable');
+      pBody.innerHTML = data.invoices.map(i => `
+        <tr>
+          <td class="p-2.5 font-mono font-bold text-indigo-300">${i.invoice_id}</td>
+          <td class="p-2.5">${i.client_name}<br><span class="text-slate-500">${i.client_email}</span></td>
+          <td class="p-2.5 font-semibold">₹${i.amount.toLocaleString('en-IN')}</td>
+          <td class="p-2.5">${i.days_overdue} days</td>
+          <td class="p-2.5">
+            <span class="px-2 py-0.5 rounded font-semibold ${i.payment_state === 'PAID' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">${i.payment_state}</span>
+          </td>
+          <td class="p-2.5">${i.client_reply || '-'} ${i.promised_date ? `<br><span class="text-amber-300 font-semibold">Promised: ${i.promised_date}</span>` : ''}</td>
+          <td class="p-2.5 font-mono">${i.portal_sent_count} ${i.last_sent_at ? `<br><span class="text-slate-500">${i.last_sent_at}</span>` : ''}</td>
+        </tr>
+      `).join('');
+
+      // Render Agent Logs Table
+      const lBody = document.getElementById('agentLogsTable');
+      lBody.innerHTML = data.logs.length ? data.logs.map(l => `
+        <tr>
+          <td class="p-2.5 font-mono">
+            <div class="font-bold text-indigo-300">${l.invoice_id}</div>
+            <div class="text-slate-500 text-[10px]">${l.source_url}</div>
+            <div class="text-slate-500 text-[10px]">${l.retrieved_at}</div>
+          </td>
+          <td class="p-2.5">
+            <span class="px-2 py-0.5 rounded font-semibold ${l.decision === 'QUEUE_REMINDER' ? 'bg-sky-500/20 text-sky-300' : 'bg-amber-500/20 text-amber-300'}">${l.decision}</span>
+            <div class="text-slate-400 mt-1">${l.input_evidence}</div>
+          </td>
+          <td class="p-2.5 max-w-md">
+            <div class="font-semibold text-indigo-200">${l.escalated_tone}</div>
+            <div class="text-slate-300 mt-1 bg-slate-800 p-2 rounded">${l.draft_message}</div>
+          </td>
+          <td class="p-2.5">
+            ${l.approval_state === 'PENDING_APPROVAL' || l.action_status === 'NETWORK_TIMEOUT_ON_SEND' ? `
+              <div class="space-y-1.5">
+                <button onclick="approveSend(${l.log_id}, false)" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1.5 rounded font-semibold">✓ Approve & Send</button>
+                <button onclick="approveSend(${l.log_id}, true)" class="w-full bg-amber-600 hover:bg-amber-500 text-white px-2.5 py-1 rounded text-[11px]">⚡ Simulate Timeout (TC4)</button>
+              </div>
+            ` : `<span class="text-slate-400 font-mono">${l.approval_state}</span>`}
+          </td>
+          <td class="p-2.5 font-mono">
+            <div class="text-emerald-300">${l.action_status}</div>
+            <div class="text-slate-400 text-[11px] mt-1">${l.verification_status}</div>
+          </td>
+        </tr>
+      `).join('') : `<tr><td colspan="5" class="p-4 text-center text-slate-500">Click "Run Agent" above to inspect invoices and generate reminder proposals.</td></tr>`;
+
+      // Render Test Matrix Table
+      const tBody = document.getElementById('testMatrixTable');
+      tBody.innerHTML = data.tests.length ? data.tests.map(t => `
+        <tr>
+          <td class="p-2.5 font-mono font-bold text-emerald-400">${t.tc_id}</td>
+          <td class="p-2.5 font-semibold">${t.scenario}</td>
+          <td class="p-2.5 text-slate-300">${t.input_data}</td>
+          <td class="p-2.5 text-amber-300 font-mono">${t.expected_result}</td>
+          <td class="p-2.5 text-emerald-300 font-mono">${t.actual_result}</td>
+          <td class="p-2.5 text-slate-400">${t.evidence}</td>
+        </tr>
+      `).join('') : `<tr><td colspan="6" class="p-4 text-center text-slate-500">Click "Run Official Test Cases (TC1 – TC4)" to populate test verification evidence.</td></tr>`;
+    }
+
+    async function planReminders() {
+      const tone = document.getElementById('baseTone').value;
+      await fetch('/api/agent/plan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({tone, run_label: 'Live Run'})
+      });
+      loadState();
+    }
+
+    async function approveSend(logId, simulateTimeout) {
+      await fetch('/api/agent/approve_and_send', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({log_id: logId, simulate_timeout: simulateTimeout})
+      });
+      loadState();
+    }
+
+    async function runOfficialTests() {
+      await fetch('/api/agent/run_official_tests', {method: 'POST'});
+      loadState();
+    }
+
+    async function resetDemo() {
+      await fetch('/api/reset', {method: 'POST'});
+      loadState();
+    }
+
+    loadState();
+  </script>
+</body>
+</html>
