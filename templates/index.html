@@ -133,6 +133,18 @@
   <script>
     let lastApiResponse = null;
 
+    // Fetch with timeout so the UI never hangs forever during a demo
+    async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, {...options, signal: controller.signal});
+        return res;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
     function showToast(message, type = 'info') {
       const container = document.getElementById('toast-container');
       const colors = {
@@ -155,18 +167,6 @@
       }, 3500);
     }
 
-    function setLoading(btnId, isLoading) {
-      const btn = document.getElementById(btnId);
-      if (isLoading) {
-        btn.classList.add('btn-loading');
-        btn.innerHTML = '<span class="flex items-center gap-2">⏳ <span>Working...</span></span>';
-        btn.disabled = true;
-      } else {
-        btn.classList.remove('btn-loading');
-        btn.disabled = false;
-      }
-    }
-
     function showApiPanel(data) {
       lastApiResponse = data;
       const panel = document.getElementById('apiPanel');
@@ -179,76 +179,79 @@
     }
 
     async function loadState() {
-      const res = await fetch('/api/state');
-      const data = await res.json();
-      showApiPanel(data);
+      try {
+        const res = await fetchWithTimeout('/api/state');
+        const data = await res.json();
+        showApiPanel(data);
 
-      document.getElementById('unpaidTotal').innerText = '₹' + data.still_unpaid_total.toLocaleString('en-IN');
+        document.getElementById('unpaidTotal').innerText = '₹' + data.still_unpaid_total.toLocaleString('en-IN');
 
-      const pBody = document.getElementById('portalTable');
-      pBody.innerHTML = data.invoices.map(i => `
-        <tr>
-          <td class="p-2.5 font-mono font-bold text-indigo-300">${i.invoice_id}</td>
-          <td class="p-2.5">${i.client_name}<br><span class="text-slate-500">${i.client_email}</span></td>
-          <td class="p-2.5 font-semibold">₹${i.amount.toLocaleString('en-IN')}</td>
-          <td class="p-2.5">${i.days_overdue} days</td>
-          <td class="p-2.5">
-            <span class="px-2 py-0.5 rounded font-semibold ${i.payment_state === 'PAID' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">${i.payment_state}</span>
-          </td>
-          <td class="p-2.5">${i.client_reply || '-'} ${i.promised_date ? `<br><span class="text-amber-300 font-semibold">Promised: ${i.promised_date}</span>` : ''}</td>
-          <td class="p-2.5 font-mono">${i.portal_sent_count} ${i.last_sent_at ? `<br><span class="text-slate-500 text-[10px]">${i.last_sent_at}</span>` : ''}</td>
-        </tr>
-      `).join('');
+        const pBody = document.getElementById('portalTable');
+        pBody.innerHTML = data.invoices.map(i => `
+          <tr>
+            <td class="p-2.5 font-mono font-bold text-indigo-300">${i.invoice_id}</td>
+            <td class="p-2.5">${i.client_name}<br><span class="text-slate-500">${i.client_email}</span></td>
+            <td class="p-2.5 font-semibold">₹${i.amount.toLocaleString('en-IN')}</td>
+            <td class="p-2.5">${i.days_overdue} days</td>
+            <td class="p-2.5">
+              <span class="px-2 py-0.5 rounded font-semibold ${i.payment_state === 'PAID' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">${i.payment_state}</span>
+            </td>
+            <td class="p-2.5">${i.client_reply || '-'} ${i.promised_date ? `<br><span class="text-amber-300 font-semibold">Promised: ${i.promised_date}</span>` : ''}</td>
+            <td class="p-2.5 font-mono">${i.portal_sent_count} ${i.last_sent_at ? `<br><span class="text-slate-500 text-[10px]">${i.last_sent_at}</span>` : ''}</td>
+          </tr>
+        `).join('');
 
-      const lBody = document.getElementById('agentLogsTable');
-      lBody.innerHTML = data.logs.length ? data.logs.map(l => `
-        <tr>
-          <td class="p-2.5 font-mono">
-            <div class="font-bold text-indigo-300">${l.invoice_id}</div>
-            <div class="text-slate-500 text-[10px]">${l.source_url}</div>
-            <div class="text-slate-500 text-[10px]">${l.retrieved_at}</div>
-          </td>
-          <td class="p-2.5">
-            <span class="px-2 py-0.5 rounded font-semibold ${l.decision === 'QUEUE_REMINDER' ? 'bg-sky-500/20 text-sky-300' : 'bg-amber-500/20 text-amber-300'}">${l.decision}</span>
-            <div class="text-slate-400 mt-1 text-[11px]">${l.input_evidence}</div>
-          </td>
-          <td class="p-2.5 max-w-md">
-            <div class="font-semibold text-indigo-200">${l.escalated_tone}</div>
-            <div class="text-slate-300 mt-1 bg-slate-800 p-2 rounded text-[11px]">${l.draft_message}</div>
-          </td>
-          <td class="p-2.5">
-            ${(l.approval_state === 'PENDING_APPROVAL' || l.action_status === 'NETWORK_TIMEOUT_ON_SEND') ? `
-              <div class="space-y-1.5">
-                <button onclick="approveSend(${l.log_id}, false)" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1.5 rounded font-semibold text-sm transition">✓ Approve & Send</button>
-                <button onclick="approveSend(${l.log_id}, true)" class="w-full bg-amber-600 hover:bg-amber-500 text-white px-2.5 py-1 rounded text-[11px] font-semibold transition">⚡ Simulate Timeout (TC4)</button>
-              </div>
-            ` : `<span class="text-slate-400 font-mono text-[11px]">${l.approval_state}</span>`}
-          </td>
-          <td class="p-2.5 font-mono text-[11px]">
-            <div class="${l.action_status.includes('SENT') || l.action_status.includes('VERIFIED') ? 'text-emerald-300' : l.action_status.includes('SKIPPED') || l.action_status.includes('PAUSED') ? 'text-amber-300' : 'text-slate-400'}">${l.action_status}</div>
-            <div class="text-slate-500 mt-1">${l.verification_status}</div>
-          </td>
-        </tr>
-      `).join('') : `<tr><td colspan="5" class="p-4 text-center text-slate-500">Click "Run Agent" above to inspect invoices and generate reminder proposals.</td></tr>`;
+        const lBody = document.getElementById('agentLogsTable');
+        lBody.innerHTML = data.logs.length ? data.logs.map(l => `
+          <tr>
+            <td class="p-2.5 font-mono">
+              <div class="font-bold text-indigo-300">${l.invoice_id}</div>
+              <div class="text-slate-500 text-[10px]">${l.source_url}</div>
+              <div class="text-slate-500 text-[10px]">${l.retrieved_at}</div>
+            </td>
+            <td class="p-2.5">
+              <span class="px-2 py-0.5 rounded font-semibold ${l.decision === 'QUEUE_REMINDER' ? 'bg-sky-500/20 text-sky-300' : 'bg-amber-500/20 text-amber-300'}">${l.decision}</span>
+              <div class="text-slate-400 mt-1 text-[11px]">${l.input_evidence}</div>
+            </td>
+            <td class="p-2.5 max-w-md">
+              <div class="font-semibold text-indigo-200">${l.escalated_tone}</div>
+              <div class="text-slate-300 mt-1 bg-slate-800 p-2 rounded text-[11px]">${l.draft_message}</div>
+            </td>
+            <td class="p-2.5">
+              ${(l.approval_state === 'PENDING_APPROVAL' || l.action_status === 'NETWORK_TIMEOUT_ON_SEND') ? `
+                <div class="space-y-1.5">
+                  <button onclick="approveSend(${l.log_id}, false)" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1.5 rounded font-semibold text-sm transition">✓ Approve & Send</button>
+                  <button onclick="approveSend(${l.log_id}, true)" class="w-full bg-amber-600 hover:bg-amber-500 text-white px-2.5 py-1 rounded text-[11px] font-semibold transition">⚡ Simulate Timeout (TC4)</button>
+                </div>
+              ` : `<span class="text-slate-400 font-mono text-[11px]">${l.approval_state}</span>`}
+            </td>
+            <td class="p-2.5 font-mono text-[11px]">
+              <div class="${l.action_status.includes('SENT') || l.action_status.includes('VERIFIED') ? 'text-emerald-300' : l.action_status.includes('SKIPPED') || l.action_status.includes('PAUSED') ? 'text-amber-300' : 'text-slate-400'}">${l.action_status}</div>
+              <div class="text-slate-500 mt-1">${l.verification_status}</div>
+            </td>
+          </tr>
+        `).join('') : `<tr><td colspan="5" class="p-4 text-center text-slate-500">Click "Run Agent" above to inspect invoices and generate reminder proposals.</td></tr>`;
 
-      const tBody = document.getElementById('testMatrixTable');
-      tBody.innerHTML = data.tests.length ? data.tests.map(t => `
-        <tr>
-          <td class="p-2.5 font-mono font-bold text-emerald-400">${t.tc_id}</td>
-          <td class="p-2.5 font-semibold">${t.scenario}</td>
-          <td class="p-2.5 text-slate-300 text-[11px]">${t.input_data}</td>
-          <td class="p-2.5 text-amber-300 font-mono text-[11px]">${t.expected_result}</td>
-          <td class="p-2.5 text-emerald-300 font-mono text-[11px]">${t.actual_result}</td>
-          <td class="p-2.5 text-slate-400 text-[11px]">${t.evidence}</td>
-        </tr>
-      `).join('') : `<tr><td colspan="6" class="p-4 text-center text-slate-500">Click "Run Official Test Cases (TC1 – TC4)" to populate test verification evidence.</td></tr>`;
+        const tBody = document.getElementById('testMatrixTable');
+        tBody.innerHTML = data.tests.length ? data.tests.map(t => `
+          <tr>
+            <td class="p-2.5 font-mono font-bold text-emerald-400">${t.tc_id}</td>
+            <td class="p-2.5 font-semibold">${t.scenario}</td>
+            <td class="p-2.5 text-slate-300 text-[11px]">${t.input_data}</td>
+            <td class="p-2.5 text-amber-300 font-mono text-[11px]">${t.expected_result}</td>
+            <td class="p-2.5 text-emerald-300 font-mono text-[11px]">${t.actual_result}</td>
+            <td class="p-2.5 text-slate-400 text-[11px]">${t.evidence}</td>
+          </tr>
+        `).join('') : `<tr><td colspan="6" class="p-4 text-center text-slate-500">Click "Run Official Test Cases (TC1 – TC4)" to populate test verification evidence.</td></tr>`;
+      } catch (err) {
+        showToast('Failed to load state: ' + err.message, 'error');
+      }
     }
 
     async function planReminders() {
-      setLoading('planBtn', true);
       try {
         const tone = document.getElementById('baseTone').value;
-        const res = await fetch('/api/agent/plan', {
+        const res = await fetchWithTimeout('/api/agent/plan', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({tone, run_label: 'Live Demo Run'}),
@@ -260,16 +263,12 @@
         await loadState();
       } catch (err) {
         showToast(err.message, 'error');
-      } finally {
-        setLoading('planBtn', false);
       }
     }
 
     async function approveSend(logId, simulateTimeout) {
-      const btnLabel = simulateTimeout ? 'Timeout simulation' : 'Approve & Send';
-      // Find button by scanning is not trivial; use generic loading via toast instead
       try {
-        const res = await fetch('/api/agent/approve_and_send', {
+        const res = await fetchWithTimeout('/api/agent/approve_and_send', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({log_id: logId, simulate_timeout: simulateTimeout}),
@@ -294,9 +293,8 @@
     }
 
     async function runOfficialTests() {
-      setLoading('testBtn', true);
       try {
-        const res = await fetch('/api/agent/run_official_tests', {method: 'POST'});
+        const res = await fetchWithTimeout('/api/agent/run_official_tests', {method: 'POST'});
         const data = await res.json();
         showApiPanel(data);
         if (!res.ok) throw new Error(data.error || 'Tests failed');
@@ -304,14 +302,12 @@
         await loadState();
       } catch (err) {
         showToast(err.message, 'error');
-      } finally {
-        setLoading('testBtn', false);
       }
     }
 
     async function resetDemo() {
       try {
-        const res = await fetch('/api/reset', {method: 'POST'});
+        const res = await fetchWithTimeout('/api/reset', {method: 'POST'});
         const data = await res.json();
         showApiPanel(data);
         showToast('Sandbox reset to default seed data', 'info');
