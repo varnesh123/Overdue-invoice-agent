@@ -67,7 +67,7 @@ source venv/bin/activate        # macOS / Linux
 pip install -r requirements.txt
 
 # 4. Run the app
-python app.py
+python app.py        # or: python3 app.py
 ```
 
 Then open **http://127.0.0.1:5000** in your browser.
@@ -93,6 +93,7 @@ Then open **http://127.0.0.1:5000** in your browser.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| `GET` | `/api/health` | Health check — confirms the agent server is up. |
 | `GET` | `/api/state` | Fetch live portal state, agent logs, and test results. |
 | `POST` | `/api/reset` | Reset sandbox to default seeded data. |
 | `POST` | `/api/agent/plan` | Run agent: collect, draft reminders, queue for approval. |
